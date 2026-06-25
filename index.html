@@ -79,17 +79,24 @@
         .team-score { font-size: 20px; font-weight: bold; }
         .miss-dots { color: var(--danger); letter-spacing: 2px; }
 
-        /* スコア履歴テーブル（表形式）のスタイル */
+        /* 表（テーブル）の横スクロール対応 */
+        .table-responsive {
+            width: 100%;
+            overflow-x: auto;
+            margin-top: 8px;
+            -webkit-overflow-scrolling: touch;
+        }
         .history-table {
             width: 100%;
+            min-width: 320px;
             border-collapse: collapse;
-            margin-top: 8px;
             font-size: 13px;
         }
         .history-table th, .history-table td {
             border: 1px solid #ddd;
             padding: 6px;
             text-align: center;
+            white-space: nowrap;
         }
         .history-table th {
             background-color: #f2f2f2;
@@ -367,6 +374,16 @@
         const listDiv = document.getElementById('playerList');
         listDiv.innerHTML = '';
 
+        // 全プレイヤーの中で「最大で何回投げたか」を計算し、表の列数を決める
+        let maxThrows = 4; // 最低でも4投分は確保する
+        teams.forEach(t => {
+            t.members.forEach(m => {
+                if (m.history.length > maxThrows) {
+                    maxThrows = m.history.length;
+                }
+            });
+        });
+
         teams.forEach((t, tIdx) => {
             let cardClass = 'team-card';
             if (t.status === 'winner') cardClass += ' winner';
@@ -376,50 +393,44 @@
             let missText = t.misses > 0 ? '❌'.repeat(t.misses) : '';
             let statusText = t.score + '点';
             if (t.status === 'winner') statusText = '🎉 勝利！';
-            if (t.status === 'eliminated') statusText = '💀 失格';
+            if (t.status === 'eliminated') statusText = '💀 失格 (0点)';
 
-            // 【新機能】スコア履歴を表（テーブル）形式で生成
+            // ヘッダー（見出し）を動的に作成
+            let thHtml = '<th style="width: 30%;">プレイヤー</th>';
+            for (let i = 1; i <= maxThrows; i++) {
+                thHtml += `<th>${i}投目</th>`;
+            }
+
+            // 各プレイヤーの行を動的に作成
             let tableRowsHtml = '';
             t.members.forEach((m, mIdx) => {
                 let isCurrentPlayer = (tIdx === currentTeamIndex && t.currentMemberIdx === mIdx && gameActive);
                 let rowClass = isCurrentPlayer ? 'active-player-row' : '';
                 
-                // 過去4回分の投球履歴を取得（枠からはみ出さないように最新4回分を表示）
-                let displayHistory = [];
-                for (let i = 0; i < 4; i++) {
+                let tdsHtml = `<td>${isCurrentPlayer ? '👤 ' : ''}${m.name}</td>`;
+                for (let i = 0; i < maxThrows; i++) {
                     if (m.history[i] !== undefined) {
-                        displayHistory.push(m.history[i] === 0 ? '<span class="cell-miss">0(❌)</span>' : `+${m.history[i]}`);
+                        let scoreText = m.history[i] === 0 ? '<span class="cell-miss">0(❌)</span>' : `+${m.history[i]}`;
+                        tdsHtml += `<td>${scoreText}</td>`;
                     } else {
-                        displayHistory.push('-'); // まだ投げていないターンはハイフン
+                        tdsHtml += '<td>-</td>';
                     }
                 }
                 
-                tableRowsHtml += `
-                    <tr class="${rowClass}">
-                        <td>${isCurrentPlayer ? '👤 ' : ''}${m.name}</td>
-                        <td>${displayHistory[0]}</td>
-                        <td>${displayHistory[1]}</td>
-                        <td>${displayHistory[2]}</td>
-                        <td>${displayHistory[3]}</td>
-                    </tr>
-                `;
+                tableRowsHtml += `<tr class="${rowClass}">${tdsHtml}</tr>`;
             });
 
             let tableHtml = `
-                <table class="history-table">
-                    <thead>
-                        <tr>
-                            <th style="width: 32%;">プレイヤー</th>
-                            <th style="width: 17%;">1投目</th>
-                            <th style="width: 17%;">2投目</th>
-                            <th style="width: 17%;">3投目</th>
-                            <th style="width: 17%;">4投目〜</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${tableRowsHtml}
-                    </tbody>
-                </table>
+                <div class="table-responsive">
+                    <table class="history-table">
+                        <thead>
+                            <tr>${thHtml}</tr>
+                        </thead>
+                        <tbody>
+                            ${tableRowsHtml}
+                        </tbody>
+                    </table>
+                </div>
             `;
 
             listDiv.innerHTML += `
@@ -451,9 +462,7 @@
         }
 
         document.getElementById('undoBtn').disabled = gameHistory.length === 0;
-    }
-
-    function submitScore(points) {
+    }    function submitScore(points) {
         if (!gameActive) return;
 
         saveToHistory();
@@ -465,9 +474,37 @@
 
         if (points === 0) {
             t.misses += 1;
+            // 3回連続ミスで失格になった場合
             if (t.misses >= 3) {
                 t.status = 'eliminated';
-                alert(`${t.name} は3回連続ミスでチーム失格です！`);
+                t.score = 0; // 失格チームは0点に固定
+                alert(`${t.name} は3回連続ミスで失格しました！`);
+                
+                // 生き残っている（プレイ中）のチームを数える
+                let activeTeams = teams.filter(team => team.status === 'playing');
+
+                if (teams.length === 2) {
+                    // 💡 2チーム対戦時のルール：片方が失格したら即終了、もう片方を50点にして勝利
+                    let winnerTeam = teams.find(team => team.status === 'playing');
+                    if (winnerTeam) {
+                        winnerTeam.status = 'winner';
+                        winnerTeam.score = 50;
+                    }
+                    gameActive = false;
+                    alert('対戦チームが失格したため、ゲーム終了です！');
+                    saveGameResult();
+                } else {
+                    // 💡 3チーム以上対戦時のルール：失格チームを置いておき、残りのチームでそのまま継続
+                    if (activeTeams.length <= 1) {
+                        // もし残ったチームが1つ以下（他が全員失格）になったらゲーム終了
+                        if (activeTeams.length === 1) {
+                            activeTeams[0].status = 'winner';
+                        }
+                        gameActive = false;
+                        alert('プレイ可能なチームがいなくなったため、ゲーム終了です。');
+                        saveGameResult();
+                    }
+                }
             }
         } else {
             t.misses = 0;
@@ -505,7 +542,6 @@
 
         if (teams[currentTeamIndex].status !== 'playing') {
             gameActive = false;
-            alert('プレイ可能なチームがいなくなったため、ゲーム終了です。');
             saveGameResult(); 
         }
     }
@@ -566,8 +602,8 @@
 
         let html = `<div class="last-result-title">🏆 前回の試合結果</div>`;
         ranking.forEach((t, idx) => {
-            let detail = t.status === 'winner' ? '🥇 50点ぴったり勝利！' : 
-                         t.status === 'eliminated' ? '💀 失格' : `${t.score}点`;
+            let detail = t.status === 'winner' ? '🥇 勝利！' : 
+                         t.status === 'eliminated' ? '💀 失格 (0点)' : `${t.score}点`;
             
             let mNames = t.members.map(m => m.name).join(',');
             html += `<div style="margin-bottom: 2px;">${idx + 1}位: ${t.name} [${mNames}] (${detail})</div>`;
