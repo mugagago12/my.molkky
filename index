@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My mölkky</title>
+    <style>
+        :root {
+            --primary: #4a5d4e;
+            --danger: #d9534f;
+            --warning: #f0ad4e;
+            --success: #5cb85c;
+            --bg: #f4f6f4;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg);
+            margin: 0;
+            padding: 15px;
+            color: #333;
+        }
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h1 { text-align: center; color: var(--primary); margin-top: 0; margin-bottom: 5px; }
+        .subtitle { text-align: center; color: #666; font-size: 14px; margin-bottom: 20px; }
+        .setup-section, .game-section { display: none; }
+        .active { display: block !important; }
+        
+        select, input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            width: 100%;
+            margin-bottom: 10px;
+        }
+        button:active { opacity: 0.8; }
+        button:disabled { background-color: #ccc; cursor: not-allowed; }
+        
+        .team-card {
+            border: 2px solid #eee;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 12px;
+            background-color: #fff;
+        }
+        .team-card-main {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 6px;
+            margin-bottom: 6px;
+        }
+        .team-card.current { border-color: var(--primary); background-color: #eef2ee; }
+        .team-card.current .team-title { font-weight: bold; color: var(--primary); }
+        .team-card.eliminated { background-color: #fce8e6; border-color: var(--danger); color: #a0a0a0; }
+        .team-card.winner { background-color: #e6f4ea; border-color: var(--success); }
+        
+        .team-title { font-size: 18px; font-weight: bold; }
+        .team-score { font-size: 20px; font-weight: bold; }
+        .miss-dots { color: var(--danger); letter-spacing: 2px; }
+
+        .table-responsive {
+            width: 100%;
+            overflow-x: auto;
+            margin-top: 8px;
+            -webkit-overflow-scrolling: touch;
+        }
+        .history-table {
+            width: 100%;
+            min-width: 320px;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        .history-table th, .history-table td {
+            border: 1px solid #ddd;
+            padding: 6px;
+            text-align: center;
+            white-space: nowrap;
+        }
+        .history-table th {
+            background-color: #f2f2f2;
+            color: #555;
+            font-weight: normal;
+        }
+        .active-player-row {
+            background-color: #fff !important;
+            font-weight: bold;
+            outline: 2px solid var(--primary);
+        }
+        .active-player-row td:first-child {
+            color: var(--primary);
+        }
+        .cell-miss {
+            color: var(--danger);
+            font-weight: bold;
+        }
+        
+        .score-pad { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 15px; }
+        .score-btn { background-color: #f0f0f0; color: #333; font-weight: bold; padding: 15px 0; margin: 0; }
+        .score-btn.miss { background-color: #fce8e6; color: var(--danger); }
+        
+        .game-status-bar { display: flex; justify-content: space-between; align-items: center; background: #eef2ee; padding: 10px; border-radius: 6px; font-weight: bold; color: var(--primary); margin-bottom: 15px; }
+        .undo-btn { background-color: var(--warning); color: white; margin-top: 15px; }
+        .last-result-box { background: #fdf6ec; border: 1px solid #f5dab1; padding: 12px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; }
+        .last-result-title { font-weight: bold; color: #b88230; margin-bottom: 5px; }
+        .setup-step { display: none; }
+        .setup-step.active { display: block !important; }
+        
+        .manual-select-item { display: flex; justify-content: space-between; align-items: center; background: #f9f9f9; padding: 8px; border-radius: 6px; margin-bottom: 6px; }
+        .manual-select-item select { width: auto; margin-bottom: 0; padding: 6px; font-size: 14px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>My mölkky</h1>
+    <div class="subtitle" id="turnCounter"></div>
+
+    <!-- 1. 設定画面 -->
+    <div id="setupScreen" class="setup-section active">
+        <div id="lastResultArea" class="last-result-box" style="display: none;"></div>
+
+        <!-- ステップA: プレイヤー全員の登録 -->
+        <div id="stepPlayers" class="setup-step active">
+            <p style="font-weight: bold; margin-bottom: 8px;">参加するプレイヤーを全員追加してください</p>
+            <input type="text" id="playerNameInput" placeholder="例: タロウ" autocomplete="off">
+            <button type="button" onclick="addPlayerName()">プレイヤーを追加</button>
+            <div id="registeredList" style="margin: 15px 0; font-weight: bold;"></div>
+            <button type="button" id="toTeamCountBtn" onclick="nextToTeamCount()" style="background-color: var(--success); display: none;">チーム数選択へ進む</button>
+        </div>
+
+        <!-- ステップB: チーム数選択と振り分け方式の決定 -->
+        <div id="stepTeamCount" class="setup-step">
+            <p style="font-weight: bold; margin-bottom: 8px;">何チームに分けますか？（上限6チーム）</p>
+            <select id="teamCountSelect" onchange="onTeamCountChange()">
+                <option value="2">2 チーム</option>
+                <option value="3">3 チーム</option>
+                <option value="4">4 チーム</option>
+                <option value="5">5 チーム</option>
+                <option value="6">6 チーム</option>
+            </select>
+            
+            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                <button type="button" onclick="selectAssignMode('auto')" style="background-color: var(--warning); margin-bottom: 0;">🎲 ランダム</button>
+                <button type="button" onclick="selectAssignMode('manual')" style="background-color: #5bc0de; margin-bottom: 0;">👤 手動選択</button>
+            </div>
+
+            <div id="teamAssignArea"></div>
+            
+            <button type="button" id="startGameBtn" onclick="startGame()" style="background-color: var(--success); margin-top: 15px; display: none;">このチームでゲーム開始！</button>
+            <button type="button" onclick="backToPlayers()" style="background-color: #777; margin-top: 5px;">メンバー登録に戻る</button>
+        </div>
+    </div>
+
+    <!-- 2. ゲーム進行画面 -->
+    <div id="gameScreen" class="game-section">
+        <div class="game-status-bar">
+            <div id="turnIndicator"></div>
+            <div id="roundIndicator"></div>
+        </div>
+        
+        <div id="playerList"></div>
+
+        <div id="inputPanel">
+            <p style="margin-bottom: 5px; font-weight: bold; text-align: center;">倒したピンの「番号」または「本数」を入力</p>
+            <div class="score-pad">
+                <button type="button" class="score-btn miss" onclick="submitScore(0)">0 (ミス)</button>
+                <button type="button" class="score-btn" onclick="submitScore(1)">1</button>
+                <button type="button" class="score-btn" onclick="submitScore(2)">2</button>
+                <button type="button" class="score-btn" onclick="submitScore(3)">3</button>
+                <button type="button" class="score-btn" onclick="submitScore(4)">4</button>
+                <button type="button" class="score-btn" onclick="submitScore(5)">5</button>
+                <button type="button" class="score-btn" onclick="submitScore(6)">6</button>
+                <button type="button" class="score-btn" onclick="submitScore(7)">7</button>
+                <button type="button" class="score-btn" onclick="submitScore(8)">8</button>
+                <button type="button" class="score-btn" onclick="submitScore(9)">9</button>
+                <button type="button" class="score-btn" onclick="submitScore(10)">10</button>
+                <button type="button" class="score-btn" onclick="submitScore(11)">11</button>
+                <button type="button" class="score-btn" onclick="submitScore(12)">12</button>
+            </div>
+            <button type="button" id="undoBtn" class="undo-btn" onclick="undoLastTurn()">↩ 1ターン前に戻す</button>
+        </div>
+        
+        <div id="endGamePanel" style="display: none; margin-top: 20px; border-top: 2px solid #ccc; padding-top: 15px;">
+            <p style="font-weight: bold; text-align: center; margin-bottom: 10px;">もう一試合遊びますか？</p>
+            <button type="button" onclick="rematchSameTeams()" style="background-color: var(--success);">🔄 同じチームのまま再戦</button>
+            <button type="button" onclick="rematchShuffleTeams()" style="background-color: var(--warning);">🎲 メンバー固定で再分け</button>
+        </div>
+        
+        <button type="button" onclick="resetGame()" style="background-color: #777; margin-top: 20px;">全リセットしてタイトルに戻る</button>
+    </div>
+</div>
+
+<script>    let allPlayers = []; 
+    let teams = [];      
+    let currentTeamIndex = 0;
+    let gameActive = false;
+    let totalTurns = 1; 
+    let currentRound = 1; 
+    let gameHistory = []; 
+    let savedTeamCount = 2; 
+    let currentMode = 'auto'; 
+
+    window.onload = function() {
+        showLastResult();
+    };
+
+    function addPlayerName() {
+        const input = document.getElementById('playerNameInput');
+        const name = input.value.trim();
+        if (!name) return;
+
+        allPlayers.push(name);
+        input.value = '';
+        input.focus();
+        updateRegisteredPlayersDisplay();
+    }
+
+    function updateRegisteredPlayersDisplay() {
+        const listDiv = document.getElementById('registeredList');
+        if (allPlayers.length === 0) {
+            listDiv.innerHTML = '';
+            document.getElementById('toTeamCountBtn').style.display = 'none';
+        } else {
+            listDiv.innerHTML = '参加者: ' + allPlayers.map((name, i) => `${i + 1}.${name}`).join('、 ');
+            document.getElementById('toTeamCountBtn').style.display = 'block';
+        }
+    }
+
+    function nextToTeamCount() {
+        document.getElementById('stepPlayers').classList.remove('active');
+        document.getElementById('stepTeamCount').classList.add('active');
+        selectAssignMode('auto'); 
+    }
+
+    function backToPlayers() {
+        document.getElementById('stepTeamCount').classList.remove('active');
+        document.getElementById('stepPlayers').classList.add('active');
+    }
+
+    function onTeamCountChange() {
+        selectAssignMode(currentMode);
+    }
+
+    function selectAssignMode(mode) {
+        currentMode = mode;
+        const teamCount = parseInt(document.getElementById('teamCountSelect').value);
+        savedTeamCount = teamCount;
+        const area = document.getElementById('teamAssignArea');
+
+        if (mode === 'auto') {
+            let shuffled = [...allPlayers];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+
+            initializeTeams(teamCount);
+            shuffled.forEach((name, idx) => {
+                teams[idx % teamCount].members.push({ name: name, history: [] });
+            });
+            teams = teams.filter(t => t.members.length > 0);
+
+            let html = '<p style="font-weight: bold; margin-bottom: 5px; color: var(--primary);">【自動チーム分け結果】</p>';
+            teams.forEach(t => {
+                html += `<div style="background:#eee; padding:8px; border-radius:6px; margin-bottom:6px; font-size:15px;"><strong>${t.name}</strong>: ${t.members.map(m=>m.name).join('、 ')}</div>`;
+            });
+            area.innerHTML = html;
+            document.getElementById('startGameBtn').style.display = 'block';
+
+        } else {
+            initializeTeams(teamCount);
+            let html = '<p style="font-weight: bold; margin-bottom: 5px; color: var(--primary);">【プレイヤーごとのチーム選択】</p>';
+            
+            allPlayers.forEach((name, pIdx) => {
+                let options = '';
+                for (let i = 0; i < teamCount; i++) {
+                    options += `<option value="${i}">チーム ${i + 1}</option>`;
+                }
+                html += `
+                    <div class="manual-select-item">
+                        <span>${name}</span>
+                        <select class="manual-team-picker" data-player-name="${name}">
+                            ${options}
+                        </select>
+                    </div>
+                `;
+            });
+            html += `<button type="button" onclick="confirmManualTeams()" style="background-color: var(--warning); margin-top: 10px;">この割り当てで決定する</button>`;
+            area.innerHTML = html;
+            document.getElementById('startGameBtn').style.display = 'none';
+        }
+    }
+
+    function initializeTeams(count) {
+        teams = [];
+        for (let i = 0; i < count; i++) {
+            teams.push({
+                name: `チーム ${i + 1}`,
+                score: 0,
+                misses: 0,
+                status: 'playing',
+                members: [],
+                currentMemberIdx: 0
+            });
+        }
+    }
+
+    function confirmManualTeams() {
+        const pickers = document.querySelectorAll('.manual-team-picker');
+        const teamCount = parseInt(document.getElementById('teamCountSelect').value);
+        initializeTeams(teamCount);
+
+        pickers.forEach(picker => {
+            const pName = picker.getAttribute('data-player-name');
+            const tIdx = parseInt(picker.value);
+            teams[tIdx].members.push({ name: pName, history: [] });
+        });
+
+        teams = teams.filter(t => t.members.length > 0);
+
+        const area = document.getElementById('teamAssignArea');
+        let html = '<p style="font-weight: bold; margin-bottom: 5px; color: var(--primary);">【決定したチーム編成】</p>';
+        teams.forEach(t => {
+            html += `<div style="background:#eef2ee; border:1px solid var(--primary); padding:8px; border-radius:6px; margin-bottom:6px; font-size:15px;"><strong>${t.name}</strong>: ${t.members.map(m=>m.name).join('、 ')}</div>`;
+        });
+        html += `<button type="button" onclick="selectAssignMode('manual')" style="background-color: #777; margin-top: 5px;">チームを選び直す</button>`;
+        area.innerHTML = html;
+        
+        document.getElementById('startGameBtn').style.display = 'block';
+    }
+
+    function startGame() {
+        gameActive = true;
+        currentTeamIndex = 0;
+        totalTurns = 1;
+        currentRound = 1;
+        gameHistory = [];
+        
+        teams.forEach(t => {
+            t.score = 0;
+            t.misses = 0;
+            t.status = 'playing';
+            t.currentMemberIdx = 0;
+            t.members.forEach(m => m.history = []);
+        });
+
+        document.getElementById('setupScreen').classList.remove('active');
+        document.getElementById('gameScreen').classList.add('active');
+        document.getElementById('endGamePanel').style.display = 'none'; 
+        updateGameDisplay();
+    }    function updateGameDisplay() {
+        const listDiv = document.getElementById('playerList');
+        listDiv.innerHTML = '';
+
+        // 全プレイヤーの中で「最大で何回投げたか」を計算し、表の列数を決める
+        let maxThrows = 4; // 最低でも4投分は確保する
+        teams.forEach(t => {
+            t.members.forEach(m => {
+                if (m.history.length > maxThrows) {
+                    maxThrows = m.history.length;
+                }
+            });
+        });
+
+        teams.forEach((t, tIdx) => {
+            let cardClass = 'team-card';
+            if (t.status === 'winner') cardClass += ' winner';
+            else if (t.status === 'eliminated') cardClass += ' eliminated';
+            else if (tIdx === currentTeamIndex && gameActive) cardClass += ' current';
+
+            let missText = t.misses > 0 ? '❌'.repeat(t.misses) : '';
+            let statusText = t.score + '点';
+            if (t.status === 'winner') statusText = '🎉 勝利！';
+            if (t.status === 'eliminated') statusText = '💀 失格 (0点)';
+
+            // ヘッダー（見出し）を動的に作成
+            let thHtml = '<th style="width: 30%;">プレイヤー</th>';
+            for (let i = 1; i <= maxThrows; i++) {
+                thHtml += `<th>${i}投目</th>`;
+            }
+
+            // 各プレイヤーの行を動的に作成
+            let tableRowsHtml = '';
+            t.members.forEach((m, mIdx) => {
+                let isCurrentPlayer = (tIdx === currentTeamIndex && t.currentMemberIdx === mIdx && gameActive);
+                let rowClass = isCurrentPlayer ? 'active-player-row' : '';
+                
+                let tdsHtml = `<td>${isCurrentPlayer ? '👤 ' : ''}${m.name}</td>`;
+                for (let i = 0; i < maxThrows; i++) {
+                    if (m.history[i] !== undefined) {
+                        let scoreText = m.history[i] === 0 ? '<span class="cell-miss">0(❌)</span>' : `+${m.history[i]}`;
+                        tdsHtml += `<td>${scoreText}</td>`;
+                    } else {
+                        tdsHtml += '<td>-</td>';
+                    }
+                }
+                
+                tableRowsHtml += `<tr class="${rowClass}">${tdsHtml}</tr>`;
+            });
+
+            let tableHtml = `
+                <div class="table-responsive">
+                    <table class="history-table">
+                        <thead>
+                            <tr>${thHtml}</tr>
+                        </thead>
+                        <tbody>
+                            ${tableRowsHtml}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+
+            listDiv.innerHTML += `
+                <div class="${cardClass}">
+                    <div class="team-card-main">
+                        <div>
+                            <span class="team-title">${t.name}</span> 
+                            <span class="miss-dots">${missText}</span>
+                        </div>
+                        <div class="team-score">${statusText}</div>
+                    </div>
+                    ${tableHtml}
+                </div>
+            `;
+        });
+
+        if (gameActive) {
+            let activeTeam = teams[currentTeamIndex];
+            let activePlayerName = activeTeam.members[activeTeam.currentMemberIdx].name;
+            document.getElementById('turnIndicator').innerText = `👉 ${activeTeam.name} (${activePlayerName}) の番`;
+            document.getElementById('roundIndicator').innerText = `${currentRound} 周目 (第 ${totalTurns} 投)`;
+            document.getElementById('inputPanel').style.display = 'block';
+            document.getElementById('endGamePanel').style.display = 'none';
+        } else {
+            document.getElementById('turnIndicator').innerText = `🏁 ゲーム終了`;
+            document.getElementById('roundIndicator').innerText = `トータル投数: ${totalTurns - 1}回`;
+            document.getElementById('inputPanel').style.display = 'none';
+            document.getElementById('endGamePanel').style.display = 'block'; 
+        }
+
+        document.getElementById('undoBtn').disabled = gameHistory.length === 0;
+    }    function submitScore(points) {
+        if (!gameActive) return;
+
+        saveToHistory();
+
+        let t = teams[currentTeamIndex];
+        let currentMember = t.members[t.currentMemberIdx];
+        
+        currentMember.history.push(points);
+
+        if (points === 0) {
+            t.misses += 1;
+            // 3回連続ミスで失格になった場合
+            if (t.misses >= 3) {
+                t.status = 'eliminated';
+                t.score = 0; // 失格チームは0点に固定
+                alert(`${t.name} は3回連続ミスで失格しました！`);
+                
+                // 生き残っている（プレイ中）のチームを数える
+                let activeTeams = teams.filter(team => team.status === 'playing');
+
+                if (teams.length === 2) {
+                    // 💡 2チーム対戦時のルール：片方が失格したら即終了、もう片方を50点にして勝利
+                    let winnerTeam = teams.find(team => team.status === 'playing');
+                    if (winnerTeam) {
+                        winnerTeam.status = 'winner';
+                        winnerTeam.score = 50;
+                    }
+                    gameActive = false;
+                    alert('対戦チームが失格したため、ゲーム終了です！');
+                    saveGameResult();
+                } else {
+                    // 💡 3チーム以上対戦時のルール：失格チームを置いておき、残りのチームでそのまま継続
+                    if (activeTeams.length <= 1) {
+                        // もし残ったチームが1つ以下（他が全員失格）になったらゲーム終了
+                        if (activeTeams.length === 1) {
+                            activeTeams.status = 'winner';
+                        }
+                        gameActive = false;
+                        alert('プレイ可能なチームがいなくなったため、ゲーム終了です。');
+                        saveGameResult();
+                    }
+                }
+            }
+        } else {
+            t.misses = 0;
+            t.score += points;
+
+            if (t.score === 50) {
+                t.status = 'winner';
+                gameActive = false;
+                alert(`${t.name} の勝利です！おめでとうございます！`);
+                saveGameResult(); 
+            } else if (t.score > 50) {
+                t.score = 25;
+                alert(`${t.name} は50点を超えたため、25点に戻りました！`);
+            }
+        }
+
+        if (gameActive) {
+            totalTurns++;
+            t.currentMemberIdx = (t.currentMemberIdx + 1) % t.members.length;
+            moveToNextTeam();
+        }
+        updateGameDisplay();
+    }
+
+    function moveToNextTeam() {
+        let searchCount = 0;
+        
+        do {
+            currentTeamIndex = (currentTeamIndex + 1) % teams.length;
+            if (currentTeamIndex === 0) {
+                currentRound++;
+            }
+            searchCount++;
+        } while (teams[currentTeamIndex].status !== 'playing' && searchCount < teams.length);
+
+        if (teams[currentTeamIndex].status !== 'playing') {
+            gameActive = false;
+            saveGameResult(); 
+        }
+    }
+
+    function saveToHistory() {
+        const state = {
+            teams: JSON.parse(JSON.stringify(teams)),
+            currentTeamIndex: currentTeamIndex,
+            gameActive: gameActive,
+            totalTurns: totalTurns,
+            currentRound: currentRound
+        };
+        gameHistory.push(state);
+    }
+
+    function undoLastTurn() {
+        if (gameHistory.length === 0) return;
+
+        const prevState = gameHistory.pop();
+        teams = prevState.teams;
+        currentTeamIndex = prevState.currentTeamIndex;
+        gameActive = prevState.gameActive;
+        totalTurns = prevState.totalTurns;
+        currentRound = prevState.currentRound;
+
+        updateGameDisplay();
+    }
+
+    function saveGameResult() {
+        const ranking = [...teams].sort((a, b) => {
+            if (a.status === 'winner') return -1;
+            if (b.status === 'winner') return 1;
+            if (a.status === 'eliminated' && b.status !== 'eliminated') return 1;
+            if (b.status === 'eliminated' && a.status !== 'eliminated') return -1;
+            return b.score - a.score;
+        });
+
+        try {
+            localStorage.setItem('molkky_shuffle_result', JSON.stringify(ranking));
+        } catch (e) {
+            window.lastMatchResultCache = ranking; 
+        }
+    }
+
+    function showLastResult() {
+        let data = null;
+        try {
+            data = localStorage.getItem('molkky_shuffle_result');
+        } catch (e) {}
+
+        let ranking = data ? JSON.parse(data) : window.lastMatchResultCache;
+        const area = document.getElementById('lastResultArea');
+        
+        if (!ranking) {
+            area.style.display = 'none';
+            return;
+        }
+
+        let html = `<div class="last-result-title">🏆 前回の試合結果</div>`;
+        ranking.forEach((t, idx) => {
+            let detail = t.status === 'winner' ? '🥇 勝利！' : 
+                         t.status === 'eliminated' ? '💀 失格 (0点)' : `${t.score}点`;
+            
+            let mNames = t.members.map(m => m.name).join(',');
+            html += `<div style="margin-bottom: 2px;">${idx + 1}位: ${t.name} [${mNames}] (${detail})</div>`;
+        });
+
+        area.innerHTML = html;
+        area.style.display = 'block';
+    }
+
+    function rematchSameTeams() {
+        if (confirm('同じチームの組み合わせで新しい試合を開始しますか？')) {
+            startGame();
+        }
+    }
+
+    function rematchShuffleTeams() {
+        if (confirm('メンバーはそのままでチームを再編成しますか？')) {
+            document.getElementById('gameScreen').classList.remove('active');
+            document.getElementById('setupScreen').classList.add('active');
+            document.getElementById('stepPlayers').classList.remove('active');
+            document.getElementById('stepTeamCount').classList.add('active');
+            document.getElementById('teamCountSelect').value = savedTeamCount;
+            selectAssignMode('auto');
+        }
+    }
+
+    function resetGame() {
+        if (confirm('登録した全プレイヤー情報を消去して、完全に最初からやり直しますか？')) {
+            allPlayers = [];
+            teams = [];
+            gameActive = false;
+            gameHistory = [];
+            document.getElementById('stepPlayers').classList.add('active');
+            document.getElementById('stepTeamCount').classList.remove('active');
+            document.getElementById('setupScreen').classList.add('active');
+            document.getElementById('gameScreen').classList.remove('active');
+            document.getElementById('registeredList').innerHTML = '';
+            document.getElementById('turnCounter').innerText = '';
+            showLastResult(); 
+        }
+    }
+</script>
+</body>
+</html>
